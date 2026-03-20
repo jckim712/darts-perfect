@@ -94,7 +94,7 @@ export default function DartScorer() {
   const [screen, setScreen] = useState("home");
   const [allPlayers, setAllPlayers] = useState([]); const [loading, setLoading] = useState(true);
   const [selectedPlayers, setSelectedPlayers] = useState([null, null]); const [assigningSeat, setAssigningSeat] = useState(null);
-  const [newNameInput, setNewNameInput] = useState(""); const [showCreateInput, setShowCreateInput] = useState(false); const [legFormat, setLegFormat] = useState(3);
+  const [newNameInput, setNewNameInput] = useState(""); const [newPinInput, setNewPinInput] = useState(""); const [showCreateInput, setShowCreateInput] = useState(false); const [legFormat, setLegFormat] = useState(3);
   const [scores, setScores] = useState([501, 501]); const [currentPlayer, setCurrentPlayer] = useState(0);
   const [inputValue, setInputValue] = useState(""); const [inputParts, setInputParts] = useState([]);
   const [history, setHistory] = useState([[], []]); const [winner, setWinner] = useState(null); const [matchWinner, setMatchWinner] = useState(null);
@@ -103,7 +103,7 @@ export default function DartScorer() {
   const [legResults, setLegResults] = useState([]);
   const [message, setMessage] = useState(""); const [legs, setLegs] = useState([0, 0]); const [startingPlayer, setStartingPlayer] = useState(0);
   const [pendingCheckout, setPendingCheckout] = useState(null); const [showWinDialog, setShowWinDialog] = useState(false);
-  const [viewingPlayer, setViewingPlayer] = useState(null); const [deleteTarget, setDeleteTarget] = useState(null); const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [viewingPlayer, setViewingPlayer] = useState(null); const [deleteTarget, setDeleteTarget] = useState(null); const [deletePinInput, setDeletePinInput] = useState(""); const [deletePinError, setDeletePinError] = useState(false); const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [scoreFlash, setScoreFlash] = useState(null);
   const [flashKey, setFlashKey] = useState(0);
   const [viewingGameDetail, setViewingGameDetail] = useState(null);
@@ -131,7 +131,7 @@ export default function DartScorer() {
     }
   }, [screen, scores, currentPlayer, history, legs, winner, matchWinner, gameStats, matchStats, legResults, legSnapshots]);
   async function refreshPlayers() { try { setAllPlayers(await loadAllPlayers()); } catch {} }
-  async function createPlayer(name) { try { const p = { id: genId(), name: name.trim(), createdAt: Date.now(), lastPlayed: null, gamesPlayed: 0, gamesWon: 0, totalRounds: 0, totalScore: 0, totalDarts: 0, highTurn: 0, gameHistory: [] }; await savePlayer(p); await refreshPlayers(); return p; } catch (e) { console.error("Create failed:", e); return { id: genId(), name: name.trim(), createdAt: Date.now(), lastPlayed: null, gamesPlayed: 0, gamesWon: 0, totalRounds: 0, totalScore: 0, totalDarts: 0, highTurn: 0, gameHistory: [] }; } }
+  async function createPlayer(name, pin) { try { const p = { id: genId(), name: name.trim(), pin: pin || "1234", createdAt: Date.now(), lastPlayed: null, gamesPlayed: 0, gamesWon: 0, totalRounds: 0, totalScore: 0, totalDarts: 0, highTurn: 0, gameHistory: [] }; await savePlayer(p); await refreshPlayers(); return p; } catch (e) { console.error("Create failed:", e); return { id: genId(), name: name.trim(), pin: pin || "1234", createdAt: Date.now(), lastPlayed: null, gamesPlayed: 0, gamesWon: 0, totalRounds: 0, totalScore: 0, totalDarts: 0, highTurn: 0, gameHistory: [] }; } }
   async function recordMatchResult(playerId, mStat, won, opponentName, legScore, detailStr) {
     try {
       const fresh = await getPlayer(playerId);
@@ -274,8 +274,26 @@ export default function DartScorer() {
 
   // ── HOME ──
   if (screen === "home") {
-    return (<div style={{ maxWidth: 420, margin: "0 auto", border: "3px solid #1A1A1A", borderRadius: 16, overflow: "hidden", background: "#111", minHeight: 700 }}>
-      {deleteTarget && <ConfirmOverlay title={`Delete ${deleteTarget.name}?`} message="All stats and game history will be permanently lost." confirmLabel="Delete" danger onConfirm={async () => { await removePlayer(deleteTarget.id); const sp = [...selectedPlayers]; if (sp[0] === deleteTarget.id) sp[0] = null; if (sp[1] === deleteTarget.id) sp[1] = null; setSelectedPlayers(sp); await refreshPlayers(); setDeleteTarget(null); }} onCancel={() => setDeleteTarget(null)} />}
+    return (<div style={{ maxWidth: 600, margin: "0 auto", border: "3px solid #1A1A1A", borderRadius: 16, overflow: "hidden", background: "#111", minHeight: "100vh" }}>
+      {deleteTarget && (
+        <Overlay onClose={() => { setDeleteTarget(null); setDeletePinInput(""); setDeletePinError(false); }}>
+          <div style={{ background: "#ffffff", borderRadius: 16, padding: 24, maxWidth: 320, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.3)" }}>
+            <div style={{ fontSize: 17, fontWeight: 500, color: "#1A1A1A", marginBottom: 8 }}>Delete {deleteTarget.name}?</div>
+            <div style={{ fontSize: 14, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>Enter PIN to confirm deletion.</div>
+            <input value={deletePinInput} onChange={e => { setDeletePinInput(e.target.value.replace(/\D/g, "").slice(0, 8)); setDeletePinError(false); }} placeholder="PIN" type="password" style={{ width: "100%", padding: "10px 12px", fontSize: 16, borderRadius: 10, border: deletePinError ? "2px solid #C41E2A" : "1px solid #ddd", outline: "none", marginBottom: 8, textAlign: "center", letterSpacing: 4 }} />
+            {deletePinError && <div style={{ fontSize: 12, color: "#C41E2A", marginBottom: 8, textAlign: "center" }}>Wrong PIN</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setDeleteTarget(null); setDeletePinInput(""); setDeletePinError(false); }} style={{ flex: 1, padding: "11px", fontSize: 14, fontWeight: 500, borderRadius: 10, cursor: "pointer", background: "#f0f0f0", color: "#333", border: "none" }}>Cancel</button>
+              <button onClick={async () => {
+                const pin = deleteTarget.pin || "1234";
+                if (deletePinInput === pin) {
+                  await removePlayer(deleteTarget.id); const sp = [...selectedPlayers]; if (sp[0] === deleteTarget.id) sp[0] = null; if (sp[1] === deleteTarget.id) sp[1] = null; setSelectedPlayers(sp); await refreshPlayers(); setDeleteTarget(null); setDeletePinInput(""); setDeletePinError(false);
+                } else { setDeletePinError(true); }
+              }} style={{ flex: 1, padding: "11px", fontSize: 14, fontWeight: 500, borderRadius: 10, cursor: "pointer", background: "#C41E2A", color: "#fff", border: "none" }}>Delete</button>
+            </div>
+          </div>
+        </Overlay>
+      )}
       {showResumePrompt && resumeData && (
         <Overlay onClose={() => { setShowResumePrompt(false); localStorage.removeItem("dartsperfect_session"); }}>
           <div style={{ background: "#1A1A1A", borderRadius: 16, padding: "28px 24px", maxWidth: 320, width: "100%", textAlign: "center", border: "2px solid #DAA520", boxShadow: "0 12px 40px rgba(0,0,0,0.4)" }}>
@@ -305,10 +323,19 @@ export default function DartScorer() {
           <div style={{ marginBottom: 18 }}><div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 6, fontWeight: 500, letterSpacing: 1, textTransform: "uppercase" }}>Match format</div><div style={{ display: "flex", gap: 6 }}>{[3, 5, 7].map(n => (<button key={n} onClick={() => setLegFormat(n)} style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 500, borderRadius: 10, cursor: "pointer", background: legFormat === n ? "#C41E2A" : "#222", color: legFormat === n ? "#fff" : "rgba(255,255,255,0.6)", border: legFormat === n ? "none" : "1px solid #333" }}>First to {n}</button>))}</div></div>
           <button onClick={startGame} disabled={!selectedPlayers[0] || !selectedPlayers[1] || selectedPlayers[0] === selectedPlayers[1]} style={{ width: "100%", padding: "14px", fontSize: 16, fontWeight: 500, borderRadius: 12, cursor: "pointer", background: (selectedPlayers[0] && selectedPlayers[1] && selectedPlayers[0] !== selectedPlayers[1]) ? "#C41E2A" : "#333", color: "#fff", border: "none", marginBottom: 20, opacity: (selectedPlayers[0] && selectedPlayers[1] && selectedPlayers[0] !== selectedPlayers[1]) ? 1 : 0.5 }}>Game on!</button>
           {showCreateInput ? (
-            <div style={{ display: "flex", gap: 8, marginBottom: 14, padding: "10px 12px", background: "#1A1A1A", borderRadius: 12, border: "1px solid #333" }}>
-              <input autoFocus value={newNameInput} onChange={e => setNewNameInput(e.target.value)} onKeyDown={async e => { if (e.key === "Enter" && newNameInput.trim()) { const np = await createPlayer(newNameInput.trim()); if (assigningSeat !== null) { const sp = [...selectedPlayers]; sp[assigningSeat] = np.id; setSelectedPlayers(sp); setAssigningSeat(null); } setNewNameInput(""); setShowCreateInput(false); } else if (e.key === "Escape") { setShowCreateInput(false); setNewNameInput(""); } }} placeholder="Player name" style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 15, color: "#fff" }} />
-              <button onClick={async () => { if (newNameInput.trim()) { const np = await createPlayer(newNameInput.trim()); if (assigningSeat !== null) { const sp = [...selectedPlayers]; sp[assigningSeat] = np.id; setSelectedPlayers(sp); setAssigningSeat(null); } setNewNameInput(""); setShowCreateInput(false); } }} style={{ padding: "6px 14px", fontSize: 13, fontWeight: 500, background: "#C41E2A", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Create</button>
-              <button onClick={() => { setShowCreateInput(false); setNewNameInput(""); }} style={{ fontSize: 16, background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>×</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14, padding: "12px", background: "#1A1A1A", borderRadius: 12, border: "1px solid #333" }}>
+              <input autoFocus value={newNameInput} onChange={e => setNewNameInput(e.target.value)} placeholder="Player name" style={{ background: "#222", border: "1px solid #333", borderRadius: 8, outline: "none", fontSize: 15, color: "#fff", padding: "8px 10px" }} />
+              <input value={newPinInput} onChange={e => setNewPinInput(e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="PIN (numbers)" type="password" style={{ background: "#222", border: "1px solid #333", borderRadius: 8, outline: "none", fontSize: 15, color: "#fff", padding: "8px 10px" }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={async () => {
+                  if (newNameInput.trim() && newPinInput.trim()) {
+                    const np = await createPlayer(newNameInput.trim(), newPinInput.trim());
+                    if (assigningSeat !== null) { const sp = [...selectedPlayers]; sp[assigningSeat] = np.id; setSelectedPlayers(sp); setAssigningSeat(null); }
+                    setNewNameInput(""); setNewPinInput(""); setShowCreateInput(false);
+                  }
+                }} style={{ flex: 1, padding: "8px", fontSize: 13, fontWeight: 500, background: (newNameInput.trim() && newPinInput.trim()) ? "#C41E2A" : "#333", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Create</button>
+                <button onClick={() => { setShowCreateInput(false); setNewNameInput(""); setNewPinInput(""); }} style={{ padding: "8px 12px", fontSize: 16, background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>×</button>
+              </div>
             </div>
           ) : (<button onClick={() => setShowCreateInput(true)} style={{ width: "100%", padding: "10px", fontSize: 13, fontWeight: 500, marginBottom: 14, borderRadius: 12, cursor: "pointer", background: "transparent", color: "rgba(255,255,255,0.4)", border: "1.5px dashed #444" }}>+ Create new player</button>)}
           {allPlayers.length > 0 && (<div><div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 8, fontWeight: 500, letterSpacing: 1, textTransform: "uppercase" }}>Players</div><div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -326,8 +353,26 @@ export default function DartScorer() {
   // ── PROFILE ──
   if (screen === "profile" && viewingPlayer) {
     const p = getPlayerById(viewingPlayer.id) || viewingPlayer;
-    return (<div style={{ maxWidth: 420, margin: "0 auto", border: "3px solid #1A1A1A", borderRadius: 16, overflow: "hidden", background: "#111", minHeight: 700 }}>
-      {deleteTarget && <ConfirmOverlay title={`Delete ${deleteTarget.name}?`} message="All stats and game history will be permanently lost." confirmLabel="Delete" danger onConfirm={async () => { await removePlayer(deleteTarget.id); const sp = [...selectedPlayers]; if (sp[0] === deleteTarget.id) sp[0] = null; if (sp[1] === deleteTarget.id) sp[1] = null; setSelectedPlayers(sp); await refreshPlayers(); setDeleteTarget(null); setScreen("home"); }} onCancel={() => setDeleteTarget(null)} />}
+    return (<div style={{ maxWidth: 600, margin: "0 auto", border: "3px solid #1A1A1A", borderRadius: 16, overflow: "hidden", background: "#111", minHeight: "100vh" }}>
+      {deleteTarget && (
+        <Overlay onClose={() => { setDeleteTarget(null); setDeletePinInput(""); setDeletePinError(false); }}>
+          <div style={{ background: "#ffffff", borderRadius: 16, padding: 24, maxWidth: 320, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.3)" }}>
+            <div style={{ fontSize: 17, fontWeight: 500, color: "#1A1A1A", marginBottom: 8 }}>Delete {deleteTarget.name}?</div>
+            <div style={{ fontSize: 14, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>Enter PIN to confirm deletion.</div>
+            <input value={deletePinInput} onChange={e => { setDeletePinInput(e.target.value.replace(/\D/g, "").slice(0, 8)); setDeletePinError(false); }} placeholder="PIN" type="password" style={{ width: "100%", padding: "10px 12px", fontSize: 16, borderRadius: 10, border: deletePinError ? "2px solid #C41E2A" : "1px solid #ddd", outline: "none", marginBottom: 8, textAlign: "center", letterSpacing: 4 }} />
+            {deletePinError && <div style={{ fontSize: 12, color: "#C41E2A", marginBottom: 8, textAlign: "center" }}>Wrong PIN</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setDeleteTarget(null); setDeletePinInput(""); setDeletePinError(false); }} style={{ flex: 1, padding: "11px", fontSize: 14, fontWeight: 500, borderRadius: 10, cursor: "pointer", background: "#f0f0f0", color: "#333", border: "none" }}>Cancel</button>
+              <button onClick={async () => {
+                const pin = deleteTarget.pin || "1234";
+                if (deletePinInput === pin) {
+                  await removePlayer(deleteTarget.id); const sp = [...selectedPlayers]; if (sp[0] === deleteTarget.id) sp[0] = null; if (sp[1] === deleteTarget.id) sp[1] = null; setSelectedPlayers(sp); await refreshPlayers(); setDeleteTarget(null); setDeletePinInput(""); setDeletePinError(false); setScreen("home");
+                } else { setDeletePinError(true); }
+              }} style={{ flex: 1, padding: "11px", fontSize: 14, fontWeight: 500, borderRadius: 10, cursor: "pointer", background: "#C41E2A", color: "#fff", border: "none" }}>Delete</button>
+            </div>
+          </div>
+        </Overlay>
+      )}
       <div style={{ padding: "1.5rem 1rem" }}>
         <button onClick={() => setScreen("home")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.5)", fontSize: 14, marginBottom: 16, padding: 0 }}>← Back</button>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}><div style={{ width: 52, height: 52, borderRadius: "50%", background: "#C41E2A", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 500, fontSize: 22, flexShrink: 0 }}>{p.name.charAt(0).toUpperCase()}</div><div><div style={{ fontSize: 22, fontWeight: 500, color: "#fff" }}>{p.name}</div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>Joined {new Date(p.createdAt).toLocaleDateString()}</div></div></div>
@@ -352,12 +397,12 @@ export default function DartScorer() {
   const p1 = getPlayerById(selectedPlayers[0]); const p2 = getPlayerById(selectedPlayers[1]);
   const pNames = [p1?.name || "P1", p2?.name || "P2"];
   const displayScores = [0, 1].map(i => i === currentPlayer ? previewScore : scores[i]);
-  const inputDisplay = inputParts.length > 0 ? inputParts.join(" + ") + (inputValue ? " + " + inputValue : "") + " = " + currentInputTotal : (inputValue || "0");
+  const inputDisplay = inputParts.length > 0 ? inputParts.join(" + ") + (inputValue ? " + " + inputValue : " +") + " = " + currentInputTotal : (inputValue || "0");
   const ROWS = [{ left: 26, keys: [1, 2, 3], right: 57 }, { left: 29, keys: [4, 5, 6], right: 60 }, { left: 41, keys: [7, 8, 9], right: 95 }, { left: 45, keys: ["del", 0, "+"], right: 100 }];
   const maxRounds = Math.max(history[0].length, history[1].length);
 
   return (
-    <div style={{ maxWidth: 420, margin: "0 auto", userSelect: "none", display: "flex", flexDirection: "column", border: "3px solid #1A1A1A", borderRadius: 16, overflow: "hidden", position: "relative", background: "#111", height: "100vh", maxHeight: "100dvh" }}>
+    <div style={{ maxWidth: 600, margin: "0 auto", userSelect: "none", display: "flex", flexDirection: "column", border: "3px solid #1A1A1A", borderRadius: 16, overflow: "hidden", position: "relative", background: "#111", height: "100vh", maxHeight: "100dvh" }}>
       {pendingCheckout && <DartCountDialog score={pendingCheckout.turnScore} onSelect={n => applyTurn(pendingCheckout.turnScore, n)} />}
       {showWinDialog && matchWinner !== null && <WinDialog playerName={pNames[matchWinner]} legs={legs} onDone={() => { setShowWinDialog(false); setScreen("matchStats"); }} />}
       {showEndConfirm && <ConfirmOverlay title="End match" message="End current match? Progress will not be saved." confirmLabel="End match" danger onConfirm={() => { setShowEndConfirm(false); setScreen("home"); }} onCancel={() => setShowEndConfirm(false)} />}
@@ -366,10 +411,10 @@ export default function DartScorer() {
       {/* SCOREBOARD */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 52px 1fr", flexShrink: 0 }}>
         {[0, 1].map(idx => { const isTyping = idx === currentPlayer && hasInput; const sc = displayScores[idx]; const isBust = isTyping && (sc < 0 || sc === 1); return (
-          <div key={idx} style={{ padding: "10px 0", textAlign: "center", background: currentPlayer === idx ? SC[idx] : "#1A1A1A", transition: "background 0.2s", order: idx === 0 ? 0 : 2 }}>
-            <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.65)", letterSpacing: 0.5 }}>{pNames[idx]}</div>
-            <div style={{ fontSize: 42, fontWeight: 500, fontFamily: "'Inter', 'Helvetica Neue', -apple-system, sans-serif", letterSpacing: -2, lineHeight: 1.1, color: isBust ? "#FF6B6B" : isTyping ? "#FFD700" : "#fff", transition: "color 0.15s" }}>{isBust ? scores[idx] : sc}</div>
-            {isBust ? <div style={{ fontSize: 11, color: "#FF6B6B", fontWeight: 500, marginTop: 1 }}>BUST</div> : <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>avg {calcAvg3(idx)}</div>}
+          <div key={idx} style={{ padding: "1.2vh 0", textAlign: "center", background: currentPlayer === idx ? SC[idx] : "#1A1A1A", transition: "background 0.2s", order: idx === 0 ? 0 : 2 }}>
+            <div style={{ fontSize: "2.5vw", fontWeight: 500, color: "rgba(255,255,255,0.65)", letterSpacing: 0.5 }}>{pNames[idx]}</div>
+            <div style={{ fontSize: "8vw", fontWeight: 500, fontFamily: "'Inter', 'Helvetica Neue', -apple-system, sans-serif", letterSpacing: -2, lineHeight: 1.1, color: isBust ? "#FF6B6B" : isTyping ? "#FFD700" : "#fff", transition: "color 0.15s" }}>{isBust ? scores[idx] : sc}</div>
+            {isBust ? <div style={{ fontSize: "2.5vw", color: "#FF6B6B", fontWeight: 500, marginTop: 1 }}>BUST</div> : <div style={{ fontSize: "2.2vw", color: "rgba(255,255,255,0.35)", marginTop: 2 }}>avg {calcAvg3(idx)}</div>}
           </div>); })}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#111", order: 1, gap: 2 }}>
           <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase" }}>Ft{legFormat}</div>
@@ -405,9 +450,9 @@ export default function DartScorer() {
       </div>
 
       {/* INPUT DISPLAY */}
-      <div style={{ background: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "center", height: 48, flexShrink: 0 }}>
-        <span style={{ fontSize: 30, fontWeight: 500, color: (inputValue || inputParts.length > 0) ? "#1A1A1A" : "#ccc", fontFamily: "'Inter', 'Helvetica Neue', -apple-system, sans-serif", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden" }}>{inputDisplay}</span>
-        {(inputValue || inputParts.length > 0) && <span style={{ width: 2, height: 24, background: "#C41E2A", marginLeft: 2, flexShrink: 0, animation: "blink 1s step-end infinite" }} />}
+      <div style={{ background: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "center", height: "6vh", flexShrink: 0 }}>
+        <span style={{ fontSize: "5vw", fontWeight: 500, color: (inputValue || inputParts.length > 0) ? "#1A1A1A" : "#ccc", fontFamily: "'Inter', 'Helvetica Neue', -apple-system, sans-serif", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden" }}>{inputDisplay}</span>
+        {(inputValue || inputParts.length > 0) && <span style={{ width: 2, height: "3vh", background: "#C41E2A", marginLeft: 2, flexShrink: 0, animation: "blink 1s step-end infinite" }} />}
       </div>
 
       {/* BACK / MODE / BUST */}
@@ -418,18 +463,18 @@ export default function DartScorer() {
       </div>
 
       {/* KEYPAD */}
-      <div style={{ display: "flex", flexDirection: "column", background: "#222", flexShrink: 0 }}>
-        {ROWS.map((row, ri) => (<div key={ri} style={{ display: "grid", gridTemplateColumns: "48px 1fr 1fr 1fr 48px", minHeight: 52 }}>
-          <button onClick={() => submitScore(row.left)} style={{ ...B, fontSize: 14, fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>{row.left}</button>
-          {row.keys.map((k, ki) => { const isDel = k === "del"; const isPlus = k === "+"; return (<button key={ki} onClick={() => { if (isDel) handleDelete(); else if (isPlus) handlePlus(); else handleNumKey(k); }} style={{ ...B, fontSize: isDel || isPlus ? 18 : 22, fontWeight: 500, background: isDel ? "#444" : isPlus ? "#2A5A8A" : "#F5F0E8", color: isDel || isPlus ? "#fff" : "#1A1A1A", border: "0.5px solid rgba(0,0,0,0.1)" }}>{isDel ? "←" : k}</button>); })}
-          <button onClick={() => submitScore(row.right)} style={{ ...B, fontSize: 14, fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>{row.right}</button>
+      <div style={{ display: "flex", flexDirection: "column", background: "#222", flexShrink: 0, flex: 2 }}>
+        {ROWS.map((row, ri) => (<div key={ri} style={{ display: "grid", gridTemplateColumns: "12% 1fr 1fr 1fr 12%", flex: 1 }}>
+          <button onClick={() => submitScore(row.left)} style={{ ...B, fontSize: "3.2vw", fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>{row.left}</button>
+          {row.keys.map((k, ki) => { const isDel = k === "del"; const isPlus = k === "+"; return (<button key={ki} onClick={() => { if (isDel) handleDelete(); else if (isPlus) handlePlus(); else handleNumKey(k); }} style={{ ...B, fontSize: isDel || isPlus ? "3.5vw" : "5vw", fontWeight: 500, background: isDel ? "#444" : isPlus ? "#2A5A8A" : "#F5F0E8", color: isDel || isPlus ? "#fff" : "#1A1A1A", border: "0.5px solid rgba(0,0,0,0.1)" }}>{isDel ? "←" : k}</button>); })}
+          <button onClick={() => submitScore(row.right)} style={{ ...B, fontSize: "3.2vw", fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>{row.right}</button>
         </div>))}
-        <div style={{ display: "grid", gridTemplateColumns: "48px 1fr 1fr 1fr 48px", minHeight: 48 }}>
-          <button onClick={() => submitScore(85)} style={{ ...B, fontSize: 14, fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>85</button>
-          <button onClick={() => submitScore(0)} style={{ ...B, fontSize: 14, fontWeight: 500, background: "#DAA520", color: "#fff", border: "0.5px solid rgba(0,0,0,0.1)" }}>MISS</button>
-          <button onClick={() => submitScore(180)} style={{ ...B, fontSize: 16, fontWeight: 500, background: "#C41E2A", color: "#fff", border: "0.5px solid rgba(0,0,0,0.1)" }}>180</button>
-          <button onClick={handleSubmitInput} style={{ ...B, fontSize: 15, fontWeight: 500, background: "#1B8A42", color: "#fff", border: "0.5px solid rgba(0,0,0,0.1)" }}>OK</button>
-          <button onClick={() => submitScore(140)} style={{ ...B, fontSize: 14, fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>140</button>
+        <div style={{ display: "grid", gridTemplateColumns: "12% 1fr 1fr 1fr 12%", flex: 1 }}>
+          <button onClick={() => submitScore(85)} style={{ ...B, fontSize: "3.2vw", fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>85</button>
+          <button onClick={() => submitScore(0)} style={{ ...B, fontSize: "3.2vw", fontWeight: 500, background: "#DAA520", color: "#fff", border: "0.5px solid rgba(0,0,0,0.1)" }}>MISS</button>
+          <button onClick={() => submitScore(180)} style={{ ...B, fontSize: "3.5vw", fontWeight: 500, background: "#C41E2A", color: "#fff", border: "0.5px solid rgba(0,0,0,0.1)" }}>180</button>
+          <button onClick={handleSubmitInput} style={{ ...B, fontSize: "3.5vw", fontWeight: 500, background: "#1B8A42", color: "#fff", border: "0.5px solid rgba(0,0,0,0.1)" }}>OK</button>
+          <button onClick={() => submitScore(140)} style={{ ...B, fontSize: "3.2vw", fontWeight: 500, background: "transparent", color: "#B5D4F4", border: "0.5px solid #2A2A2A" }}>140</button>
         </div>
       </div>
 

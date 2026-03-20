@@ -111,6 +111,9 @@ export default function DartScorer() {
   const [legSnapshots, setLegSnapshots] = useState([]);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [resumeData, setResumeData] = useState(null);
+  const [selectTarget, setSelectTarget] = useState(null);
+  const [selectPinInput, setSelectPinInput] = useState("");
+  const [selectPinError, setSelectPinError] = useState(false);
 
   useEffect(() => {
     loadAllPlayers().then(p => { setAllPlayers(p); setLoading(false); }).catch(() => setLoading(false));
@@ -294,6 +297,30 @@ export default function DartScorer() {
           </div>
         </Overlay>
       )}
+      {selectTarget && (
+        <Overlay onClose={() => { setSelectTarget(null); setSelectPinInput(""); setSelectPinError(false); }}>
+          <div style={{ background: "#1A1A1A", borderRadius: 16, padding: "24px", maxWidth: 300, width: "100%", textAlign: "center", border: "2px solid #444", boxShadow: "0 12px 40px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize: 18, fontWeight: 500, color: "#fff", marginBottom: 4 }}>{selectTarget.name}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>Enter PIN to select</div>
+            <input autoFocus value={selectPinInput} onChange={e => { setSelectPinInput(e.target.value.replace(/\D/g, "").slice(0, 8)); setSelectPinError(false); }}
+              onKeyDown={e => { if (e.key === "Enter") {
+                const pin = selectTarget.pin || "1234";
+                if (selectPinInput === pin) { const sp = [...selectedPlayers]; sp[assigningSeat] = selectTarget.id; setSelectedPlayers(sp); setAssigningSeat(null); setSelectTarget(null); setSelectPinInput(""); setSelectPinError(false); }
+                else { setSelectPinError(true); }
+              }}}
+              placeholder="PIN" type="password" style={{ width: "100%", padding: "12px", fontSize: 20, borderRadius: 10, border: selectPinError ? "2px solid #C41E2A" : "2px solid #444", background: "#222", color: "#fff", outline: "none", textAlign: "center", letterSpacing: 6, marginBottom: 8 }} />
+            {selectPinError && <div style={{ fontSize: 12, color: "#C41E2A", marginBottom: 8 }}>Wrong PIN</div>}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button onClick={() => { setSelectTarget(null); setSelectPinInput(""); setSelectPinError(false); }} style={{ flex: 1, padding: "10px", fontSize: 14, fontWeight: 500, borderRadius: 10, cursor: "pointer", background: "#333", color: "#aaa", border: "none" }}>Cancel</button>
+              <button onClick={() => {
+                const pin = selectTarget.pin || "1234";
+                if (selectPinInput === pin) { const sp = [...selectedPlayers]; sp[assigningSeat] = selectTarget.id; setSelectedPlayers(sp); setAssigningSeat(null); setSelectTarget(null); setSelectPinInput(""); setSelectPinError(false); }
+                else { setSelectPinError(true); }
+              }} style={{ flex: 1, padding: "10px", fontSize: 14, fontWeight: 500, borderRadius: 10, cursor: "pointer", background: "#C41E2A", color: "#fff", border: "none" }}>Confirm</button>
+            </div>
+          </div>
+        </Overlay>
+      )}
       {showResumePrompt && resumeData && (
         <Overlay onClose={() => { setShowResumePrompt(false); localStorage.removeItem("dartsperfect_session"); }}>
           <div style={{ background: "#1A1A1A", borderRadius: 16, padding: "28px 24px", maxWidth: 320, width: "100%", textAlign: "center", border: "2px solid #DAA520", boxShadow: "0 12px 40px rgba(0,0,0,0.4)" }}>
@@ -340,7 +367,7 @@ export default function DartScorer() {
           ) : (<button onClick={() => setShowCreateInput(true)} style={{ width: "100%", padding: "10px", fontSize: 13, fontWeight: 500, marginBottom: 14, borderRadius: 12, cursor: "pointer", background: "transparent", color: "rgba(255,255,255,0.4)", border: "1.5px dashed #444" }}>+ Create new player</button>)}
           {allPlayers.length > 0 && (<div><div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 8, fontWeight: 500, letterSpacing: 1, textTransform: "uppercase" }}>Players</div><div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {allPlayers.map(p => { const isSel = selectedPlayers[0] === p.id || selectedPlayers[1] === p.id; const sSeat = selectedPlayers[0] === p.id ? 0 : selectedPlayers[1] === p.id ? 1 : -1; return (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: isSel ? "#222" : "#1A1A1A", borderRadius: 12, cursor: "pointer", border: isSel ? `2px solid ${SC[sSeat]}` : assigningSeat !== null ? `1.5px solid ${SC[assigningSeat]}44` : "1px solid #2A2A2A", opacity: (assigningSeat !== null && isSel) ? 0.4 : 1 }} onClick={() => { if (assigningSeat !== null && !isSel) { const sp = [...selectedPlayers]; sp[assigningSeat] = p.id; setSelectedPlayers(sp); setAssigningSeat(null); } }}>
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: isSel ? "#222" : "#1A1A1A", borderRadius: 12, cursor: "pointer", border: isSel ? `2px solid ${SC[sSeat]}` : assigningSeat !== null ? `1.5px solid ${SC[assigningSeat]}44` : "1px solid #2A2A2A", opacity: (assigningSeat !== null && isSel) ? 0.4 : 1 }} onClick={() => { if (assigningSeat !== null && !isSel) { setSelectTarget(p); setSelectPinInput(""); setSelectPinError(false); } }}>
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: isSel ? SC[sSeat] : "#333", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 500, fontSize: 15, flexShrink: 0 }}>{p.name.charAt(0).toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 500, color: "#fff", display: "flex", alignItems: "center", gap: 6 }}>{p.name}{isSel && <span style={{ fontSize: 10, fontWeight: 500, color: SC[sSeat], background: SC[sSeat] + "18", padding: "1px 6px", borderRadius: 10 }}>P{sSeat + 1}</span>}</div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>{p.gamesPlayed > 0 ? `${p.gamesPlayed}G · avg ${playerAvg3(p)} · ${playerWinRate(p)}%W` : "No games yet"}</div></div>
                 <button onClick={e => { e.stopPropagation(); setViewingPlayer(p); setScreen("profile"); }} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", fontSize: 18, padding: "4px 6px" }}>›</button>
